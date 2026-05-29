@@ -26,7 +26,7 @@ public class DashboardController {
     public ResponseEntity<?> headlessPromedioNotasPorCurso() {
         try {
             List<?> respuesta = restClient.get()
-                    .uri("/api/graficos/headless/promedio-notas-por-curso")
+                    .uri("/headless/promedio-notas-por-curso")
                     .retrieve()
                     .body(List.class);
             return ResponseEntity.ok(respuesta);
@@ -40,7 +40,7 @@ public class DashboardController {
     public ResponseEntity<?> headlessAsistenciaVsNota() {
         try {
             List<?> respuesta = restClient.get()
-                    .uri("/api/graficos/headless/asistencia-vs-nota")
+                    .uri("/headless/asistencia-vs-nota")
                     .retrieve()
                     .body(List.class);
             return ResponseEntity.ok(respuesta);
@@ -54,7 +54,7 @@ public class DashboardController {
     public ResponseEntity<?> headlessRendimientoPorProfesor() {
         try {
             List<?> respuesta = restClient.get()
-                    .uri("/api/graficos/headless/rendimiento-por-profesor")
+                    .uri("/headless/rendimiento-por-profesor")
                     .retrieve()
                     .body(List.class);
             return ResponseEntity.ok(respuesta);
@@ -69,7 +69,7 @@ public class DashboardController {
             @RequestParam(defaultValue = "10") int top) {
         try {
             List<?> respuesta = restClient.get()
-                    .uri("/api/graficos/headless/asistencia-por-curso?top=" + top)
+                    .uri("/headless/asistencia-por-curso?top=" + top)
                     .retrieve()
                     .body(List.class);
             return ResponseEntity.ok(respuesta);
@@ -83,7 +83,7 @@ public class DashboardController {
     public ResponseEntity<?> headlessEstudiantesPorProfesor() {
         try {
             List<?> respuesta = restClient.get()
-                    .uri("/api/graficos/headless/estudiantes-por-profesor")
+                    .uri("/headless/estudiantes-por-profesor")
                     .retrieve()
                     .body(List.class);
             return ResponseEntity.ok(respuesta);
@@ -97,7 +97,7 @@ public class DashboardController {
     public ResponseEntity<?> headlessCursosPorProfesor() {
         try {
             List<?> respuesta = restClient.get()
-                    .uri("/api/graficos/headless/cursos-por-profesor")
+                    .uri("/headless/cursos-por-profesor")
                     .retrieve()
                     .body(List.class);
             return ResponseEntity.ok(respuesta);
@@ -111,7 +111,7 @@ public class DashboardController {
     public ResponseEntity<?> headlessCursosPorEstudiante() {
         try {
             List<?> respuesta = restClient.get()
-                    .uri("/api/graficos/headless/cursos-por-estudiante")
+                    .uri("/headless/cursos-por-estudiante")
                     .retrieve()
                     .body(List.class);
             return ResponseEntity.ok(respuesta);
@@ -126,7 +126,7 @@ public class DashboardController {
             @RequestParam(defaultValue = "10") int top) {
         try {
             List<?> respuesta = restClient.get()
-                    .uri("/api/graficos/headless/cursos-con-mas-estudiantes?top=" + top)
+                    .uri("/headless/cursos-con-mas-estudiantes?top=" + top)
                     .retrieve()
                     .body(List.class);
             return ResponseEntity.ok(respuesta);
