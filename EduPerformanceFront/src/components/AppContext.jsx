@@ -36,9 +36,9 @@ const INITIAL_TEACHERS = [
 ];
 
 const INITIAL_STUDENTS = [
-  { id: 1, usuarioId: 3, codigo: "EST-2026-001", carrera: "Ingeniería de Sistemas", semestre: 6 },
-  { id: 2, usuarioId: 4, codigo: "EST-2026-002", carrera: "Ingeniería de Sistemas", semestre: 5 },
-  { id: 3, usuarioId: 5, codigo: "EST-2026-003", carrera: "Ingeniería de Sistemas", semestre: 6 }
+  { id: 1, usuarioId: 3, codigo: "EST-2026-001", carrera: "Ingeniería de Sistemas", semestre: 6, cursos: ["Desarrollo Web Frontend", "Bases de Datos I"] },
+  { id: 2, usuarioId: 4, codigo: "EST-2026-002", carrera: "Ingeniería de Sistemas", semestre: 5, cursos: ["Desarrollo Web Frontend", "Bases de Datos I"] },
+  { id: 3, usuarioId: 5, codigo: "EST-2026-003", carrera: "Ingeniería de Sistemas", semestre: 6, cursos: ["Desarrollo Web Frontend"] }
 ];
 
 const INITIAL_COURSES = [
@@ -197,7 +197,8 @@ export function AppProvider({ children }) {
         usuarioId: e.usuarioId || (usuarios.find(u => u.email === e.email)?.id) || e.id,
         codigo: e.codigo || `EST-2026-00${e.id}`,
         carrera: e.carrera || "Ingeniería de Sistemas",
-        semestre: e.semestre || 6
+        semestre: e.semestre || 6,
+        cursos: e.cursos || []
       }));
 
       // Mapear cursos
@@ -708,12 +709,26 @@ export function AppProvider({ children }) {
             carrera: roleSpecificData.carrera || "Ingeniería de Sistemas",
             semestre: parseInt(roleSpecificData.semestre || 1, 10)
           });
+          
+          // Enrolar al estudiante en todos los cursos del backend de forma automática
+          let enrolledCourseNames = [];
+          try {
+            const courses = await cursosService.getAll();
+            for (const course of courses) {
+              await estudiantesService.matricular(studentRes.id, course.id);
+              enrolledCourseNames.push(course.nombre);
+            }
+          } catch (enrollErr) {
+            console.error("Error al matricular estudiante automáticamente:", enrollErr);
+          }
+
           createdRoleEntity = {
             id: studentRes.id,
             usuarioId: userRes.id,
             codigo: studentRes.codigo || `EST-2026-00${studentRes.id}`,
             carrera: studentRes.carrera || roleSpecificData.carrera || "Ingeniería de Sistemas",
-            semestre: parseInt(studentRes.semestre || roleSpecificData.semestre || 1, 10)
+            semestre: parseInt(studentRes.semestre || roleSpecificData.semestre || 1, 10),
+            cursos: enrolledCourseNames
           };
         } else if (userData.role === "profesor") {
           const teacherRes = await profesoresService.create({
@@ -784,7 +799,8 @@ export function AppProvider({ children }) {
           usuarioId: newUserId,
           codigo: `EST-2026-00${newStudentId}`,
           carrera: roleSpecificData.carrera || "Ingeniería de Sistemas",
-          semestre: parseInt(roleSpecificData.semestre || 1, 10)
+          semestre: parseInt(roleSpecificData.semestre || 1, 10),
+          cursos: prev.courses.map(c => c.nombre)
         };
         updatedStudents = [...prev.students, localStudent];
       } else if (userData.role === "profesor") {

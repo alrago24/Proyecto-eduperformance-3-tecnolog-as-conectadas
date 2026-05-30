@@ -48,6 +48,61 @@ const buildCode = (label) => {
   return initials || cleanLabel.slice(0, 4).toUpperCase();
 };
 
+const calculateAverageByCourseLocally = (db) => {
+  const courseGrades = {};
+  db.courses.forEach(course => {
+    courseGrades[course.id] = [];
+  });
+  db.grades.forEach(grade => {
+    if (courseGrades[grade.cursoId] !== undefined) {
+      courseGrades[grade.cursoId].push(grade.nota);
+    }
+  });
+  return db.courses.map(course => {
+    const gradesList = courseGrades[course.id];
+    const avg = gradesList.length > 0
+      ? gradesList.reduce((sum, val) => sum + val, 0) / gradesList.length
+      : 0;
+    return {
+      name: course.nombre,
+      code: course.codigo || buildCode(course.nombre),
+      avg: avg
+    };
+  });
+};
+
+const calculateCursosConMasEstudiantesLocally = (db) => {
+  const courseCounts = {};
+  db.courses.forEach(course => {
+    courseCounts[course.nombre] = new Set();
+  });
+  db.students.forEach(student => {
+    if (student.cursos && Array.isArray(student.cursos)) {
+      student.cursos.forEach(courseName => {
+        if (courseCounts[courseName]) {
+          courseCounts[courseName].add(student.id);
+        }
+      });
+    }
+  });
+  db.grades.forEach(grade => {
+    const course = db.courses.find(c => c.id === grade.cursoId);
+    if (course && courseCounts[course.nombre]) {
+      courseCounts[course.nombre].add(grade.estudianteId);
+    }
+  });
+  db.attendances.forEach(attendance => {
+    const course = db.courses.find(c => c.id === attendance.cursoId);
+    if (course && courseCounts[course.nombre]) {
+      courseCounts[course.nombre].add(attendance.estudianteId);
+    }
+  });
+  return Object.keys(courseCounts).map(courseName => ({
+    name: courseName,
+    value: courseCounts[courseName].size
+  })).sort((a, b) => b.value - a.value);
+};
+
 const normalizeAverageByCourse = (items = []) => items.map((item) => {
   const name = pickText(item, ["curso", "nombreCurso", "nombre_curso", "nombre", "asignatura", "course"]);
   return {
@@ -61,7 +116,7 @@ const normalizeRankingData = (items = []) => items.map((item) => {
   const name = pickText(item, ["curso", "nombreCurso", "nombre_curso", "nombre", "profesor", "docente", "label"]);
   return {
     name,
-    value: pickNumber(item, ["total", "cantidad", "estudiantes", "numeroEstudiantes", "conteo", "value"])
+    value: pickNumber(item, ["total", "total_estudiantes", "cantidad", "estudiantes", "numeroEstudiantes", "conteo", "value"])
   };
 });
 
@@ -198,8 +253,11 @@ export default function AdminDashboard() {
         });
       } catch (error) {
         if (!alive) return;
-        console.error("Error cargando graficos administrativos:", error);
-        setChartsError("No fue posible cargar los graficos desde el servicio analitico.");
+        console.warn("Error cargando graficos analíticos del backend, calculando localmente:", error);
+        setAdminCharts({
+          promedioNotasPorCurso: calculateAverageByCourseLocally(db),
+          cursosConMasEstudiantes: calculateCursosConMasEstudiantesLocally(db)
+        });
       } finally {
         if (alive) setChartsLoading(false);
       }
@@ -210,7 +268,7 @@ export default function AdminDashboard() {
     return () => {
       alive = false;
     };
-  }, [activeTab]);
+  }, [activeTab, db.grades, db.courses, db.students, db.attendances]);
 
   // Server console logs updater
   useEffect(() => {
@@ -414,69 +472,76 @@ export default function AdminDashboard() {
     const paddingX = 40;
     const paddingY = 20;
 
-    const points = adminCharts.promedioNotasPorCurso.map((course, index) => {
-      const x = adminCharts.promedioNotasPorCurso.length > 1
-        ? paddingX + (index / (adminCharts.promedioNotasPorCurso.length - 1)) * (width - paddingX * 2)
-        : width / 2;
-      const normalizedAvg = Math.max(0, Math.min(course.avg, 5));
-      const y = height - paddingY - (normalizedAvg / 5.0) * (height - paddingY * 2);
-      return { x, y, code: course.code, avg: course.avg, name: course.name };
-    });
-
-    let d = "";
-    if (points.length > 0) {
-      d = `M ${points[0].x} ${points[0].y}`;
-      for (let i = 0; i < points.length - 1; i++) {
-        const p0 = points[i];
-        const p1 = points[i + 1];
-        const cpX1 = p0.x + (p1.x - p0.x) / 2;
-        const cpY1 = p0.y;
-        const cpX2 = p0.x + (p1.x - p0.x) / 2;
-        const cpY2 = p1.y;
-        d += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${p1.x} ${p1.y}`;
-      }
-    }
-
-    const fillD = points.length > 0
-      ? `${d} L ${points[points.length - 1].x} ${height - paddingY} L ${points[0].x} ${height - paddingY} Z`
-      : "";
+    const chartWidth = width - paddingX * 2;
+    const n = adminCharts.promedioNotasPorCurso.length;
+    const spacing = chartWidth / n;
+    const barWidth = Math.min(spacing * 0.6, 40); // cap bar width at 40px for aesthetics
+    const gap = spacing - barWidth;
 
     return (
       <div className="svg-chart-container">
         <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="barGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#a855f7" />
+              <stop offset="100%" stopColor="#6366f1" />
+            </linearGradient>
+          </defs>
+
+          {/* Gridlines */}
           <line x1={paddingX} y1={paddingY} x2={width - paddingX} y2={paddingY} className="svg-chart-grid" />
           <line x1={paddingX} y1={height / 2} x2={width - paddingX} y2={height / 2} className="svg-chart-grid" />
           <line x1={paddingX} y1={height - paddingY} x2={width - paddingX} y2={height - paddingY} className="svg-chart-grid" />
 
-          {fillD && <path d={fillD} className="svg-chart-fill" />}
-          {d && <path d={d} className="svg-chart-line" />}
+          {/* Bars */}
+          {adminCharts.promedioNotasPorCurso.map((course, i) => {
+            const x = paddingX + i * spacing + gap / 2;
+            const normalizedAvg = Math.max(0, Math.min(course.avg, 5));
+            const barHeight = (normalizedAvg / 5.0) * (height - paddingY * 2);
+            const y = height - paddingY - barHeight;
 
-          {points.map((p, i) => (
-            <g key={i}>
-              <circle cx={p.x} cy={p.y} r="4.5" className="svg-chart-point" />
-              <text
-                x={p.x}
-                y={p.y - 10}
-                textAnchor="middle"
-                fill="#ffffff"
-                fontSize="9"
-                fontWeight="900"
-                style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.8))" }}
-              >
-                {p.avg.toFixed(2)}
-              </text>
-              <text
-                x={p.x}
-                y={height - 4}
-                textAnchor="middle"
-                fill="rgba(255,255,255,0.4)"
-                fontSize="8"
-                fontWeight="700"
-              >
-                {p.code}
-              </text>
-            </g>
-          ))}
+            return (
+              <g key={i}>
+                {/* Bar */}
+                <rect
+                  x={x}
+                  y={y}
+                  width={barWidth}
+                  height={barHeight}
+                  rx="4"
+                  fill="url(#barGrad)"
+                  style={{ transition: "all 0.3s ease", cursor: "pointer" }}
+                >
+                  <title>{`${course.name}: ${course.avg.toFixed(2)}`}</title>
+                </rect>
+
+                {/* Grade Label */}
+                <text
+                  x={x + barWidth / 2}
+                  y={y - 6}
+                  textAnchor="middle"
+                  fill="#ffffff"
+                  fontSize="9"
+                  fontWeight="900"
+                  style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.8))" }}
+                >
+                  {course.avg.toFixed(2)}
+                </text>
+
+                {/* Course Code Label */}
+                <text
+                  x={x + barWidth / 2}
+                  y={height - 4}
+                  textAnchor="middle"
+                  fill="rgba(255,255,255,0.4)"
+                  fontSize="8"
+                  fontWeight="700"
+                >
+                  {course.code}
+                </text>
+              </g>
+            );
+          })}
         </svg>
       </div>
     );
